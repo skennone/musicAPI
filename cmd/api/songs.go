@@ -4,11 +4,39 @@ import (
 	"fmt"
 	"net/http"
 	"songs/internal/data"
+	"songs/internal/validator"
 	"time"
 )
 
 func (app *application) createSongHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "create a new song")
+	var input struct {
+		Title  string      `json:"title"`
+		Artist string      `json:"artist"`
+		Year   int32       `json:"year"`
+		Length data.Length `json:"length"`
+		Genres []string    `json:"genres"`
+	}
+	err := app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	song := &data.Song{
+		Title:  input.Title,
+		Artist: input.Artist,
+		Year:   input.Year,
+		Length: input.Length,
+		Genres: input.Genres,
+	}
+	v := validator.New()
+
+	if data.ValidateSong(v, song); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	fmt.Fprintf(w, "%+v\n", input)
 }
 
 func (app *application) showSongHandler(w http.ResponseWriter, r *http.Request) {
