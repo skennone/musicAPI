@@ -1,8 +1,12 @@
 package data
 
 import (
+	"database/sql"
+	"errors"
 	"songs/internal/validator"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 type Song struct {
@@ -33,4 +37,79 @@ func ValidateSong(v *validator.Validator, song *Song) {
 	v.Check(len(song.Genres) >= 1, "genres", "must contain at least 1 genre")
 	v.Check(len(song.Genres) <= 5, "genres", "must not contain more than 5 genres")
 	v.Check(validator.Unique(song.Genres), "genres", "must not contain duplicate values")
+}
+
+type SongModel struct {
+	DB *sql.DB
+}
+
+func (s SongModel) Insert(song *Song) error {
+	query := `Insert into songs (title, artist,year,length,genres)
+			Values ($1,$2,$3,$4,$5)
+			Returning id,created_at,version`
+	args := []any{song.Title, song.Artist, song.Year, song.Length, pq.Array(song.Genres)}
+	return s.DB.QueryRow(query, args...).Scan(&song.ID, &song.CreatedAt, &song.Version)
+}
+
+func (s SongModel) Get(id int64) (*Song, error) {
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
+	query := `Select id, created_at, title, artist, year, length,genres,version
+			From songs
+			where id = $1`
+	var song Song
+	err := s.DB.QueryRow(query, id).Scan(
+		&song.ID,
+		&song.CreatedAt,
+		&song.Title,
+		&song.Artist,
+		&song.Year,
+		&song.Length,
+		pq.Array(&song.Genres),
+		&song.Version,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+	return &song, nil
+}
+func (s SongModel) Update(song *Song) error {
+	query := `Update songs
+			Set title = $1, artist = $2,year = $3, length = $4, genres = $5,version = version + 1
+			where id = $6
+			Returning version`
+	args := []any{
+		song.Title,
+		song.Artist,
+		song.Year,
+		song.Length,
+		pq.Array(song.Genres),
+		song.ID,
+	}
+	return s.DB.QueryRow(query, args...).Scan(&song.Version)
+}
+func (s SongModel) Delete(id int64) error {
+	if id < 1 {
+		return ErrRecordNotFound
+	}
+	query := `Delete from songs
+			where id = $1`
+	result, err := s.DB.Exec(query, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+	return nil
 }
