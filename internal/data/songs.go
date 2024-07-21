@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"songs/internal/validator"
@@ -48,7 +49,9 @@ func (s SongModel) Insert(song *Song) error {
 			Values ($1,$2,$3,$4,$5)
 			Returning id,created_at,version`
 	args := []any{song.Title, song.Artist, song.Year, song.Length, pq.Array(song.Genres)}
-	return s.DB.QueryRow(query, args...).Scan(&song.ID, &song.CreatedAt, &song.Version)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	return s.DB.QueryRowContext(ctx, query, args...).Scan(&song.ID, &song.CreatedAt, &song.Version)
 }
 
 func (s SongModel) Get(id int64) (*Song, error) {
@@ -59,7 +62,10 @@ func (s SongModel) Get(id int64) (*Song, error) {
 			From songs
 			where id = $1`
 	var song Song
-	err := s.DB.QueryRow(query, id).Scan(
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := s.DB.QueryRowContext(ctx, query, id).Scan(
 		&song.ID,
 		&song.CreatedAt,
 		&song.Title,
@@ -82,7 +88,7 @@ func (s SongModel) Get(id int64) (*Song, error) {
 func (s SongModel) Update(song *Song) error {
 	query := `Update songs
 			Set title = $1, artist = $2,year = $3, length = $4, genres = $5,version = version + 1
-			where id = $6
+			where id = $6 and version = $7
 			Returning version`
 	args := []any{
 		song.Title,
@@ -91,8 +97,20 @@ func (s SongModel) Update(song *Song) error {
 		song.Length,
 		pq.Array(song.Genres),
 		song.ID,
+		song.Version,
 	}
-	return s.DB.QueryRow(query, args...).Scan(&song.Version)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := s.DB.QueryRowContext(ctx, query, args...).Scan(&song.Version)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrEditConflict
+		default:
+			return err
+		}
+	}
+	return nil
 }
 func (s SongModel) Delete(id int64) error {
 	if id < 1 {
@@ -100,7 +118,9 @@ func (s SongModel) Delete(id int64) error {
 	}
 	query := `Delete from songs
 			where id = $1`
-	result, err := s.DB.Exec(query, id)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	result, err := s.DB.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}

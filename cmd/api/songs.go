@@ -88,22 +88,32 @@ func (app *application) updateSongHandler(w http.ResponseWriter, r *http.Request
 		}
 	}
 	var input struct {
-		Title  string      `json:"title"`
-		Artist string      `json:"artist"`
-		Year   int32       `json:"year"`
-		Length data.Length `json:"length"`
-		Genres []string    `json:"genres"`
+		Title  *string      `json:"title"`
+		Artist *string      `json:"artist"`
+		Year   *int32       `json:"year"`
+		Length *data.Length `json:"length"`
+		Genres []string     `json:"genres"`
 	}
 	err = app.readJSON(w, r, &input)
 	if err != nil {
 		app.badRequestResponse(w, r, err)
 		return
 	}
-	song.Title = input.Title
-	song.Artist = input.Artist
-	song.Year = input.Year
-	song.Length = input.Length
-	song.Genres = input.Genres
+	if input.Title != nil {
+		song.Title = *input.Title
+	}
+	if input.Artist != nil {
+		song.Artist = *input.Artist
+	}
+	if input.Year != nil {
+		song.Year = *input.Year
+	}
+	if input.Length != nil {
+		song.Length = *input.Length
+	}
+	if input.Genres != nil {
+		song.Genres = input.Genres
+	}
 	v := validator.New()
 	if data.ValidateSong(v, song); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
@@ -111,7 +121,12 @@ func (app *application) updateSongHandler(w http.ResponseWriter, r *http.Request
 	}
 	err = app.models.Songs.Update(song)
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
+		switch {
+		case errors.Is(err, data.ErrEditConflict):
+			app.editConflictResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
 		return
 	}
 	err = app.writeJSON(w, http.StatusOK, envelope{"song": song}, nil)
