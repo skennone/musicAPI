@@ -156,3 +156,35 @@ func (app *application) deleteSongHandler(w http.ResponseWriter, r *http.Request
 		app.serverErrorResponse(w, r, err)
 	}
 }
+func (app *application) listSongsHandler(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Title  string
+		Artist string
+		Genres []string
+		data.Filters
+	}
+
+	v := validator.New()
+	qs := r.URL.Query()
+	input.Title = app.readString(qs, "title", "")
+	input.Artist = app.readString(qs, "artist", "")
+	input.Genres = app.readCSV(qs, "genres", []string{})
+	input.Filters.Page = app.readInt(qs, "page", 1, v)
+	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
+	input.Filters.Sort = app.readString(qs, "sort", "id")
+	input.Filters.SortSafelist = []string{"id", "title", "artist", "year", "length", "-id", "-title", "-artist", "-year", "-length"}
+	if data.ValidateFilters(v, input.Filters); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	songs, err := app.models.Songs.GetAll(input.Title, input.Artist, input.Genres, input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	err = app.writeJSON(w, http.StatusOK, envelope{"songs": songs}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}

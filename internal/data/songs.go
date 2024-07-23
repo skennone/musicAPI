@@ -133,3 +133,40 @@ func (s SongModel) Delete(id int64) error {
 	}
 	return nil
 }
+func (s SongModel) GetAll(title, artist string, genres []string, filters Filters) ([]*Song, error) {
+	query := `Select id, created_at,title,artist,year,length,genres,version
+ 			from songs
+   			order by id`
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.DB.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	//Ensure that the result is closed before GetAll() returns
+	defer rows.Close()
+	songs := []*Song{}
+
+	for rows.Next() {
+		var song Song
+		err := rows.Scan(
+			&song.ID,
+			&song.CreatedAt,
+			&song.Title,
+			&song.Artist,
+			&song.Year,
+			&song.Length,
+			pq.Array(&song.Genres),
+			&song.Version,
+		)
+		if err != nil {
+			return nil, err
+		}
+		songs = append(songs, &song)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return songs, nil
+}
