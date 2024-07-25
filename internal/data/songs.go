@@ -136,11 +136,14 @@ func (s SongModel) Delete(id int64) error {
 func (s SongModel) GetAll(title, artist string, genres []string, filters Filters) ([]*Song, error) {
 	query := `Select id, created_at,title,artist,year,length,genres,version
  			from songs
+			where (to_tsvector('simple',title) @@ plainto_tsquery('simple',$1) or $1 = '')
+			and (lower (artist) = lower($2) or $2='')
+			and (genres @> $3 or $3='{}')
    			order by id`
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	rows, err := s.DB.QueryContext(ctx, query)
+	rows, err := s.DB.QueryContext(ctx, query, title, artist, pq.Array(genres))
 	if err != nil {
 		return nil, err
 	}
