@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"songs/internal/validator"
 	"time"
 
@@ -133,27 +134,32 @@ func (s SongModel) Delete(id int64) error {
 	}
 	return nil
 }
-func (s SongModel) GetAll(title, artist string, genres []string, filters Filters) ([]*Song, error) {
-	query := `Select id, created_at,title,artist,year,length,genres,version
+func (s SongModel) GetAll(title, artist string, genres []string, filters Filters) ([]*Song, Metadata, error) {
+	// count(*) over() = window function -> counts the total filtered records
+	query := fmt.Sprintf(`Select count(*) over(), id, created_at,title,artist,year,length,genres,version
  			from songs
 			where (to_tsvector('simple',title) @@ plainto_tsquery('simple',$1) or $1 = '')
 			and (lower (artist) = lower($2) or $2='')
 			and (genres @> $3 or $3='{}')
-   			order by id`
+   			order by %s %s, id ASC
+      		limit $4 offset $5`, filters.sortColumn(), filters.sortDirection())
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	rows, err := s.DB.QueryContext(ctx, query, title, artist, pq.Array(genres))
+	args := []any{title, artist, pq.Array(genres), filters.limit(), filters.offset()}
+	rows, err := s.DB.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, Metadata{}, err
 	}
 	//Ensure that the result is closed before GetAll() returns
 	defer rows.Close()
 	songs := []*Song{}
+	totalRecords := 0
 
 	for rows.Next() {
 		var song Song
 		err := rows.Scan(
+			&totalRecords,
 			&song.ID,
 			&song.CreatedAt,
 			&song.Title,
@@ -164,12 +170,13 @@ func (s SongModel) GetAll(title, artist string, genres []string, filters Filters
 			&song.Version,
 		)
 		if err != nil {
-			return nil, err
+			return nil, Metadata{}, err
 		}
 		songs = append(songs, &song)
 	}
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return nil, Metadata{}, err
 	}
-	return songs, nil
+	metadata := calcMetadata(totalRecords, filters.Page, filters.PageSize)
+	return songs, metadata, nil
 }

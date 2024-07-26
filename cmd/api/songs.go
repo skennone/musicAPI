@@ -178,12 +178,12 @@ func (app *application) listSongsHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	songs, err := app.models.Songs.GetAll(input.Title, input.Artist, input.Genres, input.Filters)
+	songs, metadata, err := app.models.Songs.GetAll(input.Title, input.Artist, input.Genres, input.Filters)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
-	err = app.writeJSON(w, http.StatusOK, envelope{"songs": songs}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"songs": songs, "metadata": metadata}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
