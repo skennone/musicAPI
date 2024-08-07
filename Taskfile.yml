@@ -6,10 +6,10 @@ tasks:
       - docker run --name songAPI -p 5430:5432 -e POSTGRES_USER=root -e POSTGRES_PASSWORD=password -d postgres:16-alpine
   createDB:
     cmds:
-      - docker exec -it f24c8df71fcd createdb --username=root --owner=root musicDB
+      - docker exec -it songAPI createdb --username=root --owner=root musicDB
   dropDB:
     cmds:
-      - docker exec -it f24c8df71fcd dropdb musicDB
+      - docker exec -it songAPI dropdb musicDB
   connect:
     cmds:
-      - docker exec -it f24c8df71fcd psql --host=localhost --dbname=musicDB --username=musicuser
+      - docker exec -it songAPI psql --host=localhost --dbname=musicDB --username=musicuser
