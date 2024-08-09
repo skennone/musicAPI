@@ -3,7 +3,7 @@ Simple JSON API for retrieving and managing information about music.
 
 ## Setup
 To run the project locally, clone the repo
-`git@github.com:skennone/songsAPI.git`
+`git@github.com:skennone/musicAPI.git`
 
 Run the following commands from the provided `Makefile` to run the project
 
