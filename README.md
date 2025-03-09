@@ -37,6 +37,7 @@ PUT /v1/users/activated
 ```
 
 ## TODO:
-- [ ] Authentication
-- [ ] User Activation
+- [x] Authentication
+- [x] User Activation
+- [ ] Permission-based Authorization
 - [ ] ...
